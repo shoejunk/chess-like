@@ -21,6 +21,8 @@ let piecesData = null;
 let selectedPiece = null;
 let playerColor = null;
 let pieceImages = {};
+let totalImagesToLoad = 0;
+let imagesLoadedSuccessfully = 0;
 
 // Connect to WebSocket server
 const socket = new WebSocket(`ws://${window.location.host}`);
@@ -55,7 +57,12 @@ socket.onmessage = (event) => {
           : `Game over - ${gameState.status.split('_')[0]} wins!`;
       
       // Render the updated board
-      renderBoard();
+      // Only call renderBoard if all images have finished loading.
+      // The preloadImages function's onload/onerror handlers will call renderBoard
+      // once image loading is complete if gameState is already set.
+      if (imagesLoadedSuccessfully === totalImagesToLoad) {
+        renderBoard();
+      }
       break;
       
     case 'opponentDisconnected':
@@ -71,17 +78,49 @@ socket.onclose = () => {
 
 // Preload piece images
 function preloadImages() {
+  totalImagesToLoad = Object.keys(piecesData).length;
+  imagesLoadedSuccessfully = 0;
+
+  if (totalImagesToLoad === 0) {
+    // No images to load, check if gameState is ready
+    if (gameState) {
+      renderBoard();
+    }
+    return;
+  }
+
   Object.keys(piecesData).forEach(pieceType => {
     const piece = piecesData[pieceType];
     const img = new Image();
     img.src = piece.image;
+
+    img.onload = () => {
+      imagesLoadedSuccessfully++;
+      if (imagesLoadedSuccessfully === totalImagesToLoad && gameState) {
+        renderBoard();
+      }
+    };
+
+    img.onerror = () => {
+      console.error(`Failed to load image: ${piece.image}`);
+      imagesLoadedSuccessfully++; // Count as an attempted load
+      if (imagesLoadedSuccessfully === totalImagesToLoad && gameState) {
+        renderBoard();
+      }
+    };
     pieceImages[pieceType] = img;
   });
 }
 
 // Render the game board
 function renderBoard() {
-  if (!gameState) return;
+  // It's possible preloadImages completes before gameState is set,
+  // so renderBoard might be called when gameState is null.
+  // Also, the initial renderBoard() call at the end of the script might occur before gameState is ready.
+  if (!gameState || !piecesData) {
+    console.log("RenderBoard called but gameState or piecesData not ready yet.");
+    return;
+  }
   
   // Clear canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -190,5 +229,6 @@ canvas.addEventListener('click', (event) => {
   }
 });
 
-// Initial render
-renderBoard();
+// Initial render is problematic if assets or gameState aren't ready.
+// renderBoard(); 
+// We will now rely on the logic within preloadImages and gameState message handler to call renderBoard.
