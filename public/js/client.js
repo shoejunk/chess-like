@@ -233,6 +233,22 @@ function renderBoard() {
       }
     }
   }
+
+  // Display steam for the current player if it's their turn
+  if (gameState && playerColor && gameState.turn === playerColor) {
+    let steamCount = 0;
+    if (playerColor === 'white' && gameState.whiteSteam !== undefined) {
+      steamCount = gameState.whiteSteam;
+    } else if (playerColor === 'black' && gameState.blackSteam !== undefined) {
+      steamCount = gameState.blackSteam;
+    }
+
+    ctx.fillStyle = 'black'; // Color of the text
+    ctx.font = '20px Arial'; // Font size and type
+    ctx.textAlign = 'left'; // Align text to the left
+    ctx.textBaseline = 'top'; // Align text to the top
+    ctx.fillText(`Steam: ${steamCount}`, 10, 10); // Position (10, 10)
+  }
 }
 
 // --- Event Listeners for Drag and Drop and Click ---
