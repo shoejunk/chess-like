@@ -1,77 +1,108 @@
 // Test file: test/client.test.js
 
-// --- Globals to be mocked ---
-let gameState = null;
-let playerColor = null;
-// Mock pieceImages and piecesData as they are used in the full renderBoard
-// For steam display logic, they are not directly used, but the function expects them.
-let pieceImages = {}; 
-let piecesData = {}; // Needs to be an object for the health bar calculation part if testing full renderBoard
-
-// --- Mocking canvas context ---
-// This will store arguments passed to fillText
-let mockFillTextArgs = null;
-const mockCtx = {
-  clearRect: () => {}, // Mock other functions that might be called in renderBoard
-  fillRect: () => {},
-  drawImage: () => {},
-  beginPath: () => {}, // Mock if used
-  moveTo: () => {},   // Mock if used
-  lineTo: () => {},   // Mock if used
-  stroke: () => {},   // Mock if used
-  arc: () => {},      // Mock if used
-  fill: () => {},     // Mock if used
-  fillText: (text, x, y) => {
-    mockFillTextArgs = { text, x, y };
-  },
-  // Mock any other properties or methods accessed by renderBoard
-  fillStyle: '',
-  font: '',
-  textAlign: '',
-  textBaseline: '',
+// --- Mocking DOM and global variables ---
+let mockSteamDisplayElement = { textContent: '' };
+let mockCanvasElement = {
+  getContext: () => ({
+    clearRect: () => {},
+    fillRect: () => {},
+    drawImage: () => {},
+    fillText: () => {},
+    // Mock other canvas context methods if client.js's renderBoard uses them
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    stroke: () => {},
+    arc: () => {},
+    fill: () => {},
+    fillStyle: '',
+    font: '',
+    textAlign: '',
+    textBaseline: '',
+  }),
+  // Mock canvas properties if needed
+  width: 0,
+  height: 0,
 };
 
-// --- Function to be tested (simplified version or relevant part from public/js/client.js) ---
-// We are testing the steam display logic, which is at the end of renderBoard.
-// The actual rendering of board, pieces, etc., is not the focus here.
-// However, the function structure needs to be similar enough.
+global.document = {
+  getElementById: function(id) {
+    if (id === 'steamDisplay') {
+      return mockSteamDisplayElement;
+    }
+    if (id === 'gameCanvas') {
+      return mockCanvasElement;
+    }
+    return null;
+  }
+};
+
+// --- Global state variables for tests (simulating client.js) ---
+let gameState = null;
+let playerColor = null;
+let piecesData = {}; // Mocked, as renderBoard might expect it
+
+// This is the element client.js would use, now pointing to our mock
+const steamDisplayElement = global.document.getElementById('steamDisplay');
+
+// --- Simplified/Relevant client.js logic for testing ---
+
+// renderBoard is simplified as steam display is no longer its direct responsibility
+// but it might be called by the gameState handler.
 function renderBoard() {
-  // It's possible preloadImages completes before gameState is set,
-  // so renderBoard might be called when gameState is null.
-  if (!gameState || !piecesData) { // piecesData check from original
-    // console.log("RenderBoard called but gameState or piecesData not ready yet.");
+  if (!gameState || !piecesData) {
+    // console.log("MockRenderBoard: gameState or piecesData not ready.");
     return;
   }
+  // Simulate some canvas operations if they were crucial before steam display update
+  // For now, this is a no-op for steam testing.
+}
+
+// This function simulates the part of socket.onmessage that handles 'gameState'
+// and updates the steam display. This is what we'll primarily test.
+function handleGameStateMessage(newGameState, newPlayerColor) {
+  gameState = newGameState; // gameState from the message
+  // In the actual client.js, playerColor is also updated from the message's data.gameState.playerColor
+  // For testing, we pass it explicitly to simulate this.
+  playerColor = newPlayerColor; 
+
+
+  // --- This is the core logic from client.js for updating the HTML steam display ---
+  // Based on the actual client.js:
+  // const steamDisplayElement = document.getElementById('steamDisplay'); // This is global in client.js
+  // playerColor is a global in client.js, updated from message.data.playerColor
+  // gameState is a global in client.js, updated from message.data
   
-  // ... (other parts of renderBoard like clearing, drawing squares, pieces - not relevant for this specific test)
-  // For the purpose of this test, we only need the steam display logic.
-  // We assume that if gameState is valid, the preceding parts of renderBoard would execute.
-
-  // Display steam for the current player if it's their turn
-  if (gameState && playerColor && gameState.turn === playerColor) {
-    let steamCount = 0;
-    if (playerColor === 'white' && gameState.whiteSteam !== undefined) {
-      steamCount = gameState.whiteSteam;
-    } else if (playerColor === 'black' && gameState.blackSteam !== undefined) {
-      steamCount = gameState.blackSteam;
+  if (steamDisplayElement && playerColor && gameState) {
+    let currentSteam = 0;
+    if (playerColor === 'white' && gameState.whiteSteam !== undefined && gameState.whiteSteam !== null) {
+      currentSteam = gameState.whiteSteam;
+    } else if (playerColor === 'black' && gameState.blackSteam !== undefined && gameState.blackSteam !== null) {
+      currentSteam = gameState.blackSteam;
     }
-
-    mockCtx.fillStyle = 'black'; // Color of the text
-    mockCtx.font = '20px Arial'; // Font size and type
-    mockCtx.textAlign = 'left'; // Align text to the left
-    mockCtx.textBaseline = 'top'; // Align text to the top
-    mockCtx.fillText(`Steam: ${steamCount}`, 10, 10); // Position (10, 10)
+    steamDisplayElement.textContent = `Steam: ${currentSteam}`;
+  } else if (steamDisplayElement) { 
+    // This else-if branch from client.js handles cases where playerColor might not be set,
+    // or gameState might be missing some details, defaulting the display.
+    steamDisplayElement.textContent = "Steam: -";
   }
+  // --- End of core logic ---
 }
 
 
 // --- Test Helper Functions ---
-function setupTestState(currentGameState, currentPlayerColor) {
-  gameState = currentGameState;
-  playerColor = currentPlayerColor;
-  mockFillTextArgs = null; // Reset spy before each test
-  // Ensure piecesData is set to avoid early exit from renderBoard
-  piecesData = { dummy: {} }; 
+function setupTest(initialGameState, initialPlayerColor) {
+  // Reset mock element's textContent before each test
+  mockSteamDisplayElement.textContent = ''; 
+  
+  // Set initial state for gameState and playerColor for the test functions
+  // This simulates how client.js would have these variables set at the time of a message.
+  gameState = initialGameState; 
+  playerColor = initialPlayerColor;
+
+  // Call the handler to set the initial display based on these states.
+  // This simulates receiving an initial gameState message.
+  handleGameStateMessage(initialGameState, initialPlayerColor);
 }
 
 function runTest(testName, testFunction) {
@@ -79,134 +110,142 @@ function runTest(testName, testFunction) {
     testFunction();
     console.log(`PASS: ${testName}`);
   } catch (e) {
-    console.error(`FAIL: ${testName}`);
-    console.error(e.stack || e);
+    console.error(`FAIL: ${testName} :: ${e.message}`);
+    // console.error(e.stack || e); // Optional: full stack
   }
 }
 
 // --- Test Cases ---
 
-runTest("Steam IS displayed for White's turn, showing whiteSteam", () => {
-  setupTestState(
-    { turn: 'white', whiteSteam: 123, blackSteam: 50, squareControl: [], board: [] }, // Min gameState
-    'white'
-  );
-  renderBoard();
-  if (!mockFillTextArgs) {
-    throw new Error("fillText was not called for white's turn.");
-  }
-  if (mockFillTextArgs.text !== "Steam: 123") {
-    throw new Error(`Expected "Steam: 123", got "${mockFillTextArgs.text}"`);
-  }
-  if (mockFillTextArgs.x !== 10 || mockFillTextArgs.y !== 10) {
-    throw new Error(`Expected position (10,10), got (${mockFillTextArgs.x},${mockFillTextArgs.y})`);
+runTest("Steam display shows white player's steam correctly", () => {
+  const gs = { turn: 'white', whiteSteam: 123, blackSteam: 50 };
+  setupTest(gs, 'white');
+  if (mockSteamDisplayElement.textContent !== "Steam: 123") {
+    throw new Error(`Expected "Steam: 123", got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam IS displayed for Black's turn, showing blackSteam", () => {
-  setupTestState(
-    { turn: 'black', whiteSteam: 50, blackSteam: 789, squareControl: [], board: [] },
-    'black'
-  );
-  renderBoard();
-  if (!mockFillTextArgs) {
-    throw new Error("fillText was not called for black's turn.");
-  }
-  if (mockFillTextArgs.text !== "Steam: 789") {
-    throw new Error(`Expected "Steam: 789", got "${mockFillTextArgs.text}"`);
+runTest("Steam display shows black player's steam correctly", () => {
+  const gs = { turn: 'black', whiteSteam: 50, blackSteam: 789 };
+  setupTest(gs, 'black');
+  if (mockSteamDisplayElement.textContent !== "Steam: 789") {
+    throw new Error(`Expected "Steam: 789", got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed when it's NOT player's turn (White player, Black's turn)", () => {
-  setupTestState(
-    { turn: 'black', whiteSteam: 100, blackSteam: 200, squareControl: [], board: [] },
-    'white' // Local player is white, but it's black's turn
-  );
-  renderBoard();
-  if (mockFillTextArgs) {
-    throw new Error(`fillText was called for steam, but it's not white's turn. Called with: "${mockFillTextArgs.text}"`);
+runTest("Steam display shows local player's steam (White) even if not their turn", () => {
+  const gs = { turn: 'black', whiteSteam: 101, blackSteam: 200 }; // White player, Black's turn
+  setupTest(gs, 'white');
+  if (mockSteamDisplayElement.textContent !== "Steam: 101") {
+    throw new Error(`Expected "Steam: 101" for white player, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed when it's NOT player's turn (Black player, White's turn)", () => {
-  setupTestState(
-    { turn: 'white', whiteSteam: 100, blackSteam: 200, squareControl: [], board: [] },
-    'black' // Local player is black, but it's white's turn
-  );
-  renderBoard();
-  if (mockFillTextArgs) {
-    throw new Error(`fillText was called for steam, but it's not black's turn. Called with: "${mockFillTextArgs.text}"`);
+runTest("Steam display shows local player's steam (Black) even if not their turn", () => {
+  const gs = { turn: 'white', whiteSteam: 100, blackSteam: 202 }; // Black player, White's turn
+  setupTest(gs, 'black');
+  if (mockSteamDisplayElement.textContent !== "Steam: 202") {
+    throw new Error(`Expected "Steam: 202" for black player, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed if gameState is null", () => {
-  setupTestState(null, 'white');
-  renderBoard();
-  if (mockFillTextArgs) {
-    throw new Error("fillText was called for steam, but gameState is null.");
+runTest("Steam display shows 'Steam: 0' if whiteSteam is undefined", () => {
+  const gs = { turn: 'white', blackSteam: 50 }; // whiteSteam is undefined
+  setupTest(gs, 'white');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0" for undefined whiteSteam, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed if playerColor is null", () => {
-  setupTestState(
-    { turn: 'white', whiteSteam: 100, blackSteam: 200, squareControl: [], board: [] },
-    null // playerColor is null
-  );
-  renderBoard();
-  if (mockFillTextArgs) {
-    throw new Error("fillText was called for steam, but playerColor is null.");
+runTest("Steam display shows 'Steam: 0' if blackSteam is undefined", () => {
+  const gs = { turn: 'black', whiteSteam: 50 }; // blackSteam is undefined
+  setupTest(gs, 'black');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0" for undefined blackSteam, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam IS displayed with 0 steam count correctly", () => {
-  setupTestState(
-    { turn: 'white', whiteSteam: 0, blackSteam: 50, squareControl: [], board: [] },
-    'white'
-  );
-  renderBoard();
-  if (!mockFillTextArgs) {
-    throw new Error("fillText was not called for white's turn with 0 steam.");
-  }
-  if (mockFillTextArgs.text !== "Steam: 0") {
-    throw new Error(`Expected "Steam: 0", got "${mockFillTextArgs.text}"`);
+runTest("Steam display shows 'Steam: 0' if whiteSteam is null", () => {
+  const gs = { turn: 'white', whiteSteam: null, blackSteam: 50 };
+  setupTest(gs, 'white');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0" for null whiteSteam, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed if steam value is undefined (white)", () => {
-  setupTestState(
-    { turn: 'white', blackSteam: 50, squareControl: [], board: [] }, // whiteSteam is undefined
-    'white'
-  );
-  // The current implementation of renderBoard defaults steamCount to 0 if undefined,
-  // which means it *will* display "Steam: 0". This test verifies that behavior.
-  renderBoard();
-  if (!mockFillTextArgs) {
-    throw new Error("fillText was not called, but expected due to default 0 steam.");
-  }
-  if (mockFillTextArgs.text !== "Steam: 0") {
-    throw new Error(`Expected "Steam: 0" (default for undefined), got "${mockFillTextArgs.text}"`);
+runTest("Steam display shows 'Steam: 0' if blackSteam is null", () => {
+  const gs = { turn: 'black', whiteSteam: 50, blackSteam: null };
+  setupTest(gs, 'black');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0" for null blackSteam, got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
-runTest("Steam is NOT displayed if steam value is undefined (black)", () => {
-  setupTestState(
-    { turn: 'black', whiteSteam: 50, squareControl: [], board: [] }, // blackSteam is undefined
-    'black'
-  );
-  // Similar to the white case, expecting "Steam: 0"
-  renderBoard();
-  if (!mockFillTextArgs) {
-    throw new Error("fillText was not called, but expected due to default 0 steam.");
+runTest("Steam display shows 'Steam: -' if gameState is initially null", () => {
+  setupTest(null, 'white'); // gameState is null
+  if (mockSteamDisplayElement.textContent !== "Steam: -") {
+    throw new Error(`Expected "Steam: -" for null gameState, got "${mockSteamDisplayElement.textContent}"`);
   }
-  if (mockFillTextArgs.text !== "Steam: 0") {
-    throw new Error(`Expected "Steam: 0" (default for undefined), got "${mockFillTextArgs.text}"`);
+});
+
+runTest("Steam display shows 'Steam: -' if playerColor is null, even with valid gameState", () => {
+  const gs = { turn: 'white', whiteSteam: 100, blackSteam: 200 };
+  setupTest(gs, null); // playerColor is null
+  if (mockSteamDisplayElement.textContent !== "Steam: -") {
+    throw new Error(`Expected "Steam: -" for null playerColor, got "${mockSteamDisplayElement.textContent}"`);
+  }
+});
+
+runTest("Steam display updates correctly on multiple gameState messages", () => {
+  // Initial state: White player, 10 steam
+  const gs1 = { turn: 'white', whiteSteam: 10, blackSteam: 5 };
+  setupTest(gs1, 'white'); // This already calls handleGameStateMessage with gs1
+  if (mockSteamDisplayElement.textContent !== "Steam: 10") {
+    throw new Error(`Initial: Expected "Steam: 10", got "${mockSteamDisplayElement.textContent}"`);
+  }
+
+  // Second message: White player, steam increases to 15
+  // Note: playerColor ('white') is maintained as it's the local player's color.
+  // gameState.turn might change, but playerColor for the client instance does not.
+  const gs2 = { turn: 'black', whiteSteam: 15, blackSteam: 5 }; 
+  handleGameStateMessage(gs2, 'white'); // Simulate receiving a new game state
+  if (mockSteamDisplayElement.textContent !== "Steam: 15") {
+    throw new Error(`Update 1: Expected "Steam: 15", got "${mockSteamDisplayElement.textContent}"`);
+  }
+
+  // Third message: White player, steam decreases to 12
+  const gs3 = { turn: 'white', whiteSteam: 12, blackSteam: 8 };
+  handleGameStateMessage(gs3, 'white'); // Simulate another new game state
+  if (mockSteamDisplayElement.textContent !== "Steam: 12") {
+    throw new Error(`Update 2: Expected "Steam: 12", got "${mockSteamDisplayElement.textContent}"`);
+  }
+});
+
+runTest("Steam display shows 'Steam: 0' for white player when whiteSteam is 0", () => {
+  const gs = { turn: 'white', whiteSteam: 0, blackSteam: 50 };
+  setupTest(gs, 'white');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0", got "${mockSteamDisplayElement.textContent}"`);
+  }
+});
+
+runTest("Steam display shows 'Steam: 0' for black player when blackSteam is 0", () => {
+  const gs = { turn: 'black', whiteSteam: 50, blackSteam: 0 };
+  setupTest(gs, 'black');
+  if (mockSteamDisplayElement.textContent !== "Steam: 0") {
+    throw new Error(`Expected "Steam: 0", got "${mockSteamDisplayElement.textContent}"`);
   }
 });
 
 
-console.log("\n--- Client Steam Display Logic Tests Complete ---");
+console.log("\n--- Client Steam Display (HTML Element) Logic Tests Complete ---");
 // To run these tests: node test/client.test.js
-// (This assumes a Node.js environment. For actual browser JS, you'd use browser-based test runners)
-// The renderBoard function is simplified here to focus on the steam display logic.
-// Global variables gameState, playerColor, and mockCtx are set by tests.
-// piecesData is also mocked minimally as the original renderBoard checks for it.
+// These tests verify the logic that updates the #steamDisplay HTML element's textContent.
+// They mock document.getElementById and the element itself.
+// The core tested logic is encapsulated in the handleGameStateMessage function for clarity.
+// renderBoard is now mostly a no-op in the test context for steam display.
+// piecesData is minimally mocked as the original client.js renderBoard checks for it.
+// The global steamDisplayElement variable in this test file is correctly assigned the mock.
+// The `setupTest` helper initializes the state for each test by calling handleGameStateMessage.
+// Subsequent state changes in a single test are done by directly calling handleGameStateMessage.
+// Typo `mockSteamDisplayMement` was corrected to `mockSteamDisplayElement`.
