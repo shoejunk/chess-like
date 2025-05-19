@@ -34,7 +34,9 @@ function createGame(player1, player2) {
     turn: 'white',
     board: initializeBoard(),
     squareControl: Array(8).fill(null).map(() => Array(8).fill(null)),
-    status: 'active'
+    status: 'active',
+    whiteSteam: 0,
+    blackSteam: 0
   };
   
   // Assign game to players
@@ -166,6 +168,23 @@ function updateSquareControlAfterMove(game) {
       // its control was definitively set by the direct control logic earlier in this function,
       // and should not be overridden by influence calculations here.
     }
+  }
+
+  // Generate steam for the player whose turn it just was
+  const currentPlayer = game.turn; // Player who just made the move
+  let steamGained = 0;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (game.squareControl[r][c] === currentPlayer) {
+        steamGained++;
+      }
+    }
+  }
+
+  if (currentPlayer === 'white') {
+    game.whiteSteam += steamGained;
+  } else if (currentPlayer === 'black') {
+    game.blackSteam += steamGained;
   }
 }
 
