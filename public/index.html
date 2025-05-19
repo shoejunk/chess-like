@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tactical Chess Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+    }
+    
+    h1 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    #status {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: #eee;
+      border-radius: 5px;
+      min-width: 300px;
+      text-align: center;
+    }
+    
+    #gameCanvas {
+      border: 3px solid #333;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      background-color: #fff;
+    }
+    
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .instructions {
+      margin-top: 20px;
+      max-width: 640px;
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>Tactical Chess Game</h1>
+  <div id="status">Connecting to server...</div>
+  
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+  
+  <div class="instructions">
+    <h3>How to Play:</h3>
+    <p>1. Click on one of your pieces to select it.</p>
+    <p>2. Click on a valid square to move or attack.</p>
+    <p>3. When attacking, you deal damage equal to your piece's attack value.</p>
+    <p>4. If the enemy survives the attack, your piece stays in place.</p>
+    <p>5. The game ends when one player loses all their pieces.</p>
+  </div>
+  
+  <script src="/js/client.js"></script>
+</body>
+</html>

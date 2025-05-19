@@ -1,0 +1,243 @@
+{
+    "pawn": {
+      "name": "Pawn",
+      "health": 50,
+      "attack": 15,
+      "image": "/images/pawn.png",
+      "movement": [
+        {
+          "type": "straight",
+          "direction": "vertical",
+          "range": 1
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "rook": {
+      "name": "Rook",
+      "health": 100,
+      "attack": 30,
+      "image": "/images/rook.png",
+      "movement": [
+        {
+          "type": "straight",
+          "direction": "horizontal",
+          "range": 7
+        },
+        {
+          "type": "straight",
+          "direction": "vertical",
+          "range": 7
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "knight": {
+      "name": "Knight",
+      "health": 80,
+      "attack": 25,
+      "image": "/images/knight.png",
+      "movement": [
+        {
+          "type": "hop",
+          "horizontal": 1,
+          "vertical": 2
+        },
+        {
+          "type": "hop",
+          "horizontal": 2,
+          "vertical": 1
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "bishop": {
+      "name": "Bishop",
+      "health": 75,
+      "attack": 25,
+      "image": "/images/bishop.png",
+      "movement": [
+        {
+          "type": "hop",
+          "horizontal": 1,
+          "vertical": 1
+        },
+        {
+          "type": "hop",
+          "horizontal": 2,
+          "vertical": 2
+        },
+        {
+          "type": "hop",
+          "horizontal": 3,
+          "vertical": 3
+        },
+        {
+          "type": "hop",
+          "horizontal": 4,
+          "vertical": 4
+        },
+        {
+          "type": "hop",
+          "horizontal": 5,
+          "vertical": 5
+        },
+        {
+          "type": "hop",
+          "horizontal": 6,
+          "vertical": 6
+        },
+        {
+          "type": "hop",
+          "horizontal": 7,
+          "vertical": 7
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "queen": {
+      "name": "Queen",
+      "health": 90,
+      "attack": 35,
+      "image": "/images/queen.png",
+      "movement": [
+        {
+          "type": "straight",
+          "direction": "horizontal",
+          "range": 7
+        },
+        {
+          "type": "straight",
+          "direction": "vertical",
+          "range": 7
+        },
+        {
+          "type": "hop",
+          "horizontal": 1,
+          "vertical": 1
+        },
+        {
+          "type": "hop",
+          "horizontal": 2,
+          "vertical": 2
+        },
+        {
+          "type": "hop",
+          "horizontal": 3,
+          "vertical": 3
+        },
+        {
+          "type": "hop",
+          "horizontal": 4,
+          "vertical": 4
+        },
+        {
+          "type": "hop",
+          "horizontal": 5,
+          "vertical": 5
+        },
+        {
+          "type": "hop",
+          "horizontal": 6,
+          "vertical": 6
+        },
+        {
+          "type": "hop",
+          "horizontal": 7,
+          "vertical": 7
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "king": {
+      "name": "King",
+      "health": 120,
+      "attack": 20,
+      "image": "/images/king.png",
+      "movement": [
+        {
+          "type": "straight",
+          "direction": "horizontal",
+          "range": 1
+        },
+        {
+          "type": "straight",
+          "direction": "vertical",
+          "range": 1
+        },
+        {
+          "type": "hop",
+          "horizontal": 1,
+          "vertical": 1
+        }
+      ],
+      "initialPositions": {
+        "white": [[7, 4]],
+        "black": [[0, 4]]
+      }
+    },
+    "tank": {
+      "name": "Tank",
+      "health": 150,
+      "attack": 40,
+      "image": "/images/tank.png",
+      "movement": [
+        {
+          "type": "straight",
+          "direction": "horizontal",
+          "range": 2
+        },
+        {
+          "type": "straight",
+          "direction": "vertical",
+          "range": 2
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    },
+    "archer": {
+      "name": "Archer",
+      "health": 60,
+      "attack": 45,
+      "image": "/images/archer.png",
+      "movement": [
+        {
+          "type": "hop",
+          "horizontal": 2,
+          "vertical": 0
+        },
+        {
+          "type": "hop",
+          "horizontal": 0,
+          "vertical": 2
+        },
+        {
+          "type": "hop",
+          "horizontal": 1,
+          "vertical": 1
+        }
+      ],
+      "initialPositions": {
+        "white": [],
+        "black": []
+      }
+    }
+  }
