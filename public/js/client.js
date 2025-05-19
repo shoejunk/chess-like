@@ -17,6 +17,9 @@ const BLACK_CONTROL_COLOR = 'rgba(255, 182, 193, 0.5)'; // Light red/pink with 5
 canvas.width = BOARD_SIZE * SQUARE_SIZE;
 canvas.height = BOARD_SIZE * SQUARE_SIZE;
 
+// Steam display element
+const steamDisplayElement = document.getElementById('steamDisplay');
+
 // Game state
 let gameState = null;
 let piecesData = null;
@@ -64,6 +67,20 @@ socket.onmessage = (event) => {
       // once image loading is complete if gameState is already set.
       if (imagesLoadedSuccessfully === totalImagesToLoad) {
         renderBoard();
+      }
+
+      // Update steam display HTML element
+      if (steamDisplayElement && playerColor) {
+        let currentSteam = 0;
+        if (playerColor === 'white' && gameState.whiteSteam !== undefined && gameState.whiteSteam !== null) {
+          currentSteam = gameState.whiteSteam;
+        } else if (playerColor === 'black' && gameState.blackSteam !== undefined && gameState.blackSteam !== null) {
+          currentSteam = gameState.blackSteam;
+        }
+        steamDisplayElement.textContent = `Steam: ${currentSteam}`;
+      } else if (steamDisplayElement) {
+        // If playerColor isn't set yet, or other issue, display a default
+        steamDisplayElement.textContent = "Steam: -";
       }
       break;
       
@@ -205,21 +222,7 @@ function renderBoard() {
     }
   }
 
-  // Display steam for the current player if it's their turn
-  if (gameState && playerColor && gameState.turn === playerColor) {
-    let steamCount = 0;
-    if (playerColor === 'white' && gameState.whiteSteam !== undefined) {
-      steamCount = gameState.whiteSteam;
-    } else if (playerColor === 'black' && gameState.blackSteam !== undefined) {
-      steamCount = gameState.blackSteam;
-    }
-
-    ctx.fillStyle = 'black'; // Color of the text
-    ctx.font = '20px Arial'; // Font size and type
-    ctx.textAlign = 'left'; // Align text to the left
-    ctx.textBaseline = 'top'; // Align text to the top
-    ctx.fillText(`Steam: ${steamCount}`, 10, 10); // Position (10, 10)
-  }
+  // Steam display is now handled by the HTML element and updated in socket.onmessage
 }
 
 // Handle canvas click

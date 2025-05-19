@@ -1,0 +1,17 @@
+#steamDisplay {
+  background-color: #e0e0e0; /* Light grey background */
+  color: #333333; /* Dark text color */
+  padding: 10px;
+  border: 2px solid #555555; /* Solid border */
+  border-radius: 5px; /* Rounded corners */
+  text-align: center;
+  margin-bottom: 10px; /* Space below the element */
+  font-family: Verdana, sans-serif;
+  font-size: 18px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
+  /* Ensure it takes up a reasonable width, but not necessarily full canvas width */
+  /* Max-width can be considered if it looks too wide on larger screens, */
+  /* but for now, let it be block and center-aligned text. */
+  /* It will take the width of its container (game-container) by default if display:block, */
+  /* or shrink to content if display:inline-block. Text-align:center handles internal alignment. */
+}
