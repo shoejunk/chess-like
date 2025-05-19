@@ -33,6 +33,7 @@ function createGame(player1, player2) {
     },
     turn: 'white',
     board: initializeBoard(),
+    squareControl: Array(8).fill(null).map(() => Array(8).fill(null)),
     status: 'active'
   };
   
@@ -87,6 +88,85 @@ function initializeBoard() {
   });
   
   return board;
+}
+
+// Calculate initial square control
+function calculateInitialSquareControl(game) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (game.board[r][c] !== null) {
+        game.squareControl[r][c] = game.board[r][c].player;
+      }
+    }
+  }
+}
+
+// Update square control after a move
+function updateSquareControlAfterMove(game) {
+  // Initialize Influence Map
+  const influenceMap = Array(8).fill(null).map(() => 
+    Array(8).fill(null).map(() => ({ white: 0, black: 0 }))
+  );
+
+  // Iterate Through Pieces for Direct Control and Influence
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = game.board[row][col];
+      if (piece) {
+        // Direct Control: Piece's current square is controlled by its player
+        game.squareControl[row][col] = piece.player;
+
+        // Adjacent Influence
+        const player = piece.player;
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue; // Skip the piece's own square
+
+            const adjRow = row + dr;
+            const adjCol = col + dc;
+
+            if (adjRow >= 0 && adjRow < 8 && adjCol >= 0 && adjCol < 8) {
+              if (player === 'white') {
+                influenceMap[adjRow][adjCol].white++;
+              } else if (player === 'black') {
+                influenceMap[adjRow][adjCol].black++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Update game.squareControl Based on Influence
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      // Only update if not directly controlled by a piece after the move
+      if (game.board[r][c] === null) { 
+        const whiteInfluence = influenceMap[r][c].white;
+        const blackInfluence = influenceMap[r][c].black;
+
+        if (whiteInfluence > blackInfluence) {
+          game.squareControl[r][c] = 'white';
+        } else if (blackInfluence > whiteInfluence) {
+          game.squareControl[r][c] = 'black';
+        } else {
+          // If influence is tied, or zero for both, and the square is empty,
+          // it becomes neutral (null), unless it was already controlled.
+          // The subtask description implies keeping currentController if tied.
+          // However, for empty squares, if influence is tied (e.g. 0-0 or 1-1), 
+          // it should be neutral (null), not necessarily the previous controller
+          // If influence is tied (whiteInfluence === blackInfluence) for an EMPTY square,
+          // game.squareControl[r][c] should remain currentController.
+          // 'currentController' is its value after the direct control updates and before this influence check.
+          // This means we do nothing in the 'else' case here, preserving its existing value.
+        }
+      }
+      // If game.board[r][c] is NOT null (i.e., a piece is on it), 
+      // its control was definitively set by the direct control logic earlier in this function,
+      // and should not be overridden by influence calculations here.
+    }
+  }
 }
 
 // Send game state to players
@@ -219,6 +299,9 @@ function processMove(game, fromPos, toPos) {
   
   // Check win condition
   checkWinCondition(game);
+  
+  // Update square control
+  updateSquareControlAfterMove(game);
   
   // Switch turns
   game.turn = game.turn === 'white' ? 'black' : 'white';

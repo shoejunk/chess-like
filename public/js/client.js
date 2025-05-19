@@ -10,6 +10,8 @@ const SQUARE_SIZE = 80;
 const HEALTH_BAR_HEIGHT = 10;
 const HEALTH_BAR_WIDTH = 60;
 const HEALTH_BAR_OFFSET = 10;
+const WHITE_CONTROL_COLOR = 'rgba(173, 216, 230, 0.5)'; // Light blue with 50% opacity
+const BLACK_CONTROL_COLOR = 'rgba(255, 182, 193, 0.5)'; // Light red/pink with 50% opacity
 
 // Set canvas size
 canvas.width = BOARD_SIZE * SQUARE_SIZE;
@@ -130,14 +132,35 @@ function renderBoard() {
     for (let col = 0; col < BOARD_SIZE; col++) {
       // Alternate square colors
       ctx.fillStyle = (row + col) % 2 === 0 ? '#ececd7' : '#7c945d';
-      
-      // Highlight selected piece's square
-      if (selectedPiece && selectedPiece.position[0] === row && selectedPiece.position[1] === col) {
-        ctx.fillStyle = '#f6f669';
-      }
-      
       ctx.fillRect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
     }
+  }
+
+  // Draw control tints
+  if (gameState.squareControl) {
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const control = gameState.squareControl[row][col];
+        if (control === 'white') {
+          ctx.fillStyle = WHITE_CONTROL_COLOR;
+          ctx.fillRect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+        } else if (control === 'black') {
+          ctx.fillStyle = BLACK_CONTROL_COLOR;
+          ctx.fillRect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE);
+        }
+      }
+    }
+  }
+  
+  // Highlight selected piece's square (drawn over tints)
+  if (selectedPiece) {
+    ctx.fillStyle = '#f6f669'; // Yellow highlight for selected piece
+    ctx.fillRect(
+      selectedPiece.position[1] * SQUARE_SIZE, 
+      selectedPiece.position[0] * SQUARE_SIZE, 
+      SQUARE_SIZE, 
+      SQUARE_SIZE
+    );
   }
   
   // Draw pieces and health bars
