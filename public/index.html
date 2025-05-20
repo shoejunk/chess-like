@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tactical Chess Game</title>
+  <meta name="google-signin-client_id" content="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com">
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://apis.google.com/js/platform.js" onload="initGoogleSignIn()" async defer></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -54,15 +56,21 @@
   </style>
 </head>
 <body>
+  <div id="login-screen" style="text-align: center; margin-bottom: 20px;">
+    <h2>Login to Play</h2>
+    <button id="google-signin-button" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Sign in with Google</button>
+    <div id="login-error-message" style="color: red; margin-top: 10px; min-height: 1.2em;"></div>
+  </div>
   <h1>Tactical Chess Game</h1>
   <div id="status">Connecting to server...</div>
+  <div id="opponentInfo" style="margin-top: 10px; font-size: 16px;">Opponent: Waiting...</div>
   
-  <div class="game-container">
-    <div id="steamDisplay">Player Steam: -</div>
+  <div class="game-container" style="display: none;">
+    <div id="steamDisplay" style="margin-bottom: 5px;">Player Steam: -</div>
     <canvas id="gameCanvas"></canvas>
   </div>
   
-  <div class="instructions">
+  <div class="instructions" style="display: none;">
     <h3>How to Play:</h3>
     <p>1. Click on one of your pieces to select it.</p>
     <p>2. Click on a valid square to move or attack.</p>

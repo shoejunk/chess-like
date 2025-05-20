@@ -4,11 +4,22 @@ const http = require('http');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { OAuth2Client } = require('google-auth-library');
+const bodyParser = require('body-parser');
+const url = require('url'); // For parsing WebSocket URL query parameters
 
 // Initialize Express app
 const app = express();
+app.use(bodyParser.json()); // For parsing JSON request bodies
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
+
+// Google Auth Client Initialization
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'; // TODO: Use environment variable
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+// In-memory store for authenticated users (replace with a database in production)
+let authenticatedUsers = {};
 
 // Serve static files from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -28,8 +39,16 @@ function createGame(player1, player2) {
   const game = {
     id: gameId,
     players: {
-      white: player1,
-      black: player2
+      white: {
+        ws: player1, 
+        userId: player1.userId, // Populated from WebSocket connection
+        name: player1.userName // Populated from WebSocket connection
+      },
+      black: {
+        ws: player2,
+        userId: player2.userId,
+        name: player2.userName
+      }
     },
     turn: 'white',
     board: initializeBoard(),
@@ -47,6 +66,10 @@ function createGame(player1, player2) {
   
   // Store game
   games[gameId] = game;
+
+  console.log(`Game ${gameId} created between ${player1.userName || 'Player 1'} (White) and ${player2.userName || 'Player 2'} (Black)`);
+  if (player1.userId) console.log(`Player 1 (White) Google ID: ${player1.userId}`);
+  if (player2.userId) console.log(`Player 2 (Black) Google ID: ${player2.userId}`);
   
   // Send initial game state to both players
   sendGameState(game);
@@ -190,24 +213,46 @@ function updateSquareControlAfterMove(game) {
 
 // Send game state to players
 function sendGameState(game) {
-  const { white, black } = game.players;
+  const whitePlayerWs = game.players.white.ws;
+  const blackPlayerWs = game.players.black.ws;
   
-  if (white && white.readyState === WebSocket.OPEN) {
-    white.send(JSON.stringify({
+  if (whitePlayerWs && whitePlayerWs.readyState === WebSocket.OPEN) {
+    whitePlayerWs.send(JSON.stringify({
       type: 'gameState',
       data: {
-        ...game,
-        playerColor: 'white'
+        // Be careful not to send the 'ws' object itself
+        id: game.id,
+        playersInfo: { // Send non-sensitive player info
+            white: { userId: game.players.white.userId, name: game.players.white.name },
+            black: { userId: game.players.black.userId, name: game.players.black.name }
+        },
+        turn: game.turn,
+        board: game.board,
+        squareControl: game.squareControl,
+        status: game.status,
+        whiteSteam: game.whiteSteam,
+        blackSteam: game.blackSteam,
+        playerColor: 'white' // Specific to this player
       }
     }));
   }
   
-  if (black && black.readyState === WebSocket.OPEN) {
-    black.send(JSON.stringify({
+  if (blackPlayerWs && blackPlayerWs.readyState === WebSocket.OPEN) {
+    blackPlayerWs.send(JSON.stringify({
       type: 'gameState',
       data: {
-        ...game,
-        playerColor: 'black'
+        id: game.id,
+        playersInfo: {
+            white: { userId: game.players.white.userId, name: game.players.white.name },
+            black: { userId: game.players.black.userId, name: game.players.black.name }
+        },
+        turn: game.turn,
+        board: game.board,
+        squareControl: game.squareControl,
+        status: game.status,
+        whiteSteam: game.whiteSteam,
+        blackSteam: game.blackSteam,
+        playerColor: 'black' // Specific to this player
       }
     }));
   }
@@ -349,34 +394,130 @@ function checkWinCondition(game) {
   }
   
   // Check win condition
+  const whitePlayerName = game.players.white.name || 'White';
+  const blackPlayerName = game.players.black.name || 'Black';
+
   if (whitePiecesCount === 0) {
-    game.status = 'black_wins';
+    game.status = `${blackPlayerName}_wins`; // e.g., "PlayerX_wins"
   } else if (blackPiecesCount === 0) {
-    game.status = 'white_wins';
+    game.status = `${whitePlayerName}_wins`; // e.g., "PlayerY_wins"
   }
 }
 
+// --- Google Token Verification Helper ---
+async function verifyGoogleToken(token) {
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    return ticket.getPayload(); // Contains user's Google ID (sub), email, name, etc.
+  } catch (error) {
+    console.error('Error verifying Google token:', error.message);
+    return null;
+  }
+}
+
+// --- HTTP Route for Token Verification ---
+app.post('/auth/google/verify-token', async (req, res) => {
+  const { id_token } = req.body;
+  if (!id_token) {
+    return res.status(400).json({ success: false, message: 'ID token not provided.' });
+  }
+
+  const payload = await verifyGoogleToken(id_token);
+
+  if (payload) {
+    // Store user (or update if exists)
+    authenticatedUsers[payload.sub] = {
+      googleId: payload.sub,
+      name: payload.name,
+      email: payload.email,
+      // lastVerified: Date.now() // Optional: for session management
+    };
+    console.log(`User ${payload.name} (${payload.sub}) authenticated via HTTP.`);
+    res.json({ 
+      success: true, 
+      user: { googleId: payload.sub, name: payload.name, email: payload.email } 
+    });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid or expired token.' });
+  }
+});
+
+
 // WebSocket connection handling
-wss.on('connection', (ws) => {
-  console.log('Client connected');
-  
-  // Send pieces data to client
+wss.on('connection', async (ws, req) => { // Added req to access upgradeReq
+  console.log('Client attempting to connect via WebSocket...');
+
+  const query = url.parse(req.url, true).query;
+  const token = query.token;
+
+  let userPayload = null;
+  if (token) {
+    userPayload = await verifyGoogleToken(token);
+    if (userPayload) {
+      ws.userId = userPayload.sub;
+      ws.userName = userPayload.name;
+      console.log(`Client connected with Google ID: ${ws.userId} (${ws.userName})`);
+      
+      // Add user to authenticatedUsers if not already (e.g., if they skipped HTTP verification somehow)
+      if (!authenticatedUsers[ws.userId]) {
+        authenticatedUsers[ws.userId] = {
+          googleId: ws.userId,
+          name: ws.userName,
+          email: userPayload.email,
+        };
+      }
+    } else {
+      console.log('Client connected with invalid token.');
+      // Optionally, close connection or mark as unauthenticated
+      // For now, allow connection but ws.userId will be undefined.
+      // ws.close(); return; // Example: strict enforcement
+    }
+  } else {
+    console.log('Client connected without a token.');
+    // Optionally, close connection or mark as unauthenticated
+    // ws.close(); return; // Example: strict enforcement
+  }
+
+  // Send pieces data to client (regardless of auth for now, can be conditional)
   ws.send(JSON.stringify({
     type: 'piecesData',
     data: piecesData
   }));
   
   // Handle game matching
-  if (!waitingPlayer) {
-    waitingPlayer = ws;
-    ws.send(JSON.stringify({
-      type: 'waiting',
-      message: 'Waiting for opponent...'
-    }));
+  // Only match authenticated players (or players with a userId, even if token was initially invalid but accepted)
+  if (ws.userId) { // Check if user is considered authenticated (has a userId)
+    if (!waitingPlayer) {
+      waitingPlayer = ws;
+      ws.send(JSON.stringify({
+        type: 'waiting',
+        message: 'Waiting for opponent...'
+      }));
+    } else {
+      if (waitingPlayer.userId !== ws.userId) { // Prevent self-matching
+        createGame(waitingPlayer, ws);
+        waitingPlayer = null;
+      } else {
+        // Same user connected again, perhaps in a new tab.
+        // Don't match with self. Keep them as waitingPlayer or replace if this is a newer connection.
+        // For now, we'll just ignore this case and the old waitingPlayer remains.
+        console.log("User tried to match with themselves. Ignoring.");
+         ws.send(JSON.stringify({
+            type: 'waiting',
+            message: 'Cannot match with yourself. Still waiting for opponent...'
+        }));
+      }
+    }
   } else {
-    // Create a new game with waiting player
-    createGame(waitingPlayer, ws);
-    waitingPlayer = null;
+    ws.send(JSON.stringify({
+        type: 'error', // Custom type for client to handle
+        message: 'Authentication required to play. Please sign in and reconnect.'
+    }));
+    // Optionally close the connection if strict authentication is required to even receive piecesData
+    // ws.close(); 
   }
   
   // Handle messages from client
@@ -416,17 +557,29 @@ wss.on('connection', (ws) => {
     const gameId = ws.gameId;
     if (gameId && games[gameId]) {
       const game = games[gameId];
-      const opponent = ws.color === 'white' ? game.players.black : game.players.white;
+      // Determine opponent's WebSocket connection
+      let opponentWs = null;
+      if (ws.color === 'white' && game.players.black) {
+        opponentWs = game.players.black.ws;
+      } else if (ws.color === 'black' && game.players.white) {
+        opponentWs = game.players.white.ws;
+      }
       
-      if (opponent && opponent.readyState === WebSocket.OPEN) {
-        opponent.send(JSON.stringify({
+      if (opponentWs && opponentWs.readyState === WebSocket.OPEN) {
+        const disconnectedPlayerName = ws.userName || (ws.color === 'white' ? 'White' : 'Black');
+        opponentWs.send(JSON.stringify({
           type: 'opponentDisconnected',
-          message: 'Your opponent has disconnected.'
+          message: `Your opponent (${disconnectedPlayerName}) has disconnected. Game over.`
         }));
+        // Also, update the game status for the disconnected player's game, so if they refresh they see it.
+        // However, the game is deleted shortly after.
+        // If the game wasn't deleted, you might set:
+        // game.status = `${opponentWs.color === 'white' ? (game.players.white.name || 'White') : (game.players.black.name || 'Black')}_wins_by_disconnect`;
       }
       
       // Remove game
       delete games[gameId];
+      console.log(`Game ${gameId} removed due to player disconnection.`);
     }
   });
 });

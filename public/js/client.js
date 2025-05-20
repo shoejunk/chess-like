@@ -1,5 +1,12 @@
 // client.js - to be included in public/js/client.js
 
+// DOM elements for login and game
+const loginScreen = document.getElementById('login-screen');
+const googleSignInButton = document.getElementById('google-signin-button');
+const loginErrorMessageElement = document.getElementById('login-error-message'); // For displaying login errors
+const gameContainer = document.querySelector('.game-container'); // querySelector for class
+const instructions = document.querySelector('.instructions'); // querySelector for class
+
 // Game canvas setup
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -20,6 +27,7 @@ canvas.height = BOARD_SIZE * SQUARE_SIZE;
 
 // Steam display element
 const steamDisplayElement = document.getElementById('steamDisplay');
+const opponentInfoElement = document.getElementById('opponentInfo'); // Added for opponent's name
 
 // Game state
 let gameState = null;
@@ -36,9 +44,10 @@ let draggedPiece = null;
 let draggedPieceOrigPos = null; // e.g., { row: r, col: c }
 let mousePos = { x: 0, y: 0 }; // To store current mouse coordinates relative to canvas
 
-
-// Connect to WebSocket server
-const socket = new WebSocket(`ws://${window.location.host}`);
+// WebSocket and Authentication Globals
+let socket; // Will be initialized after authentication
+let currentIdToken = null;
+let currentUserInfo = null; // To store user info from server { googleId, name, email }
 
 // Function to render the board with a ghost piece during drag
 function renderBoardWithGhostPiece() {
@@ -61,68 +70,135 @@ function renderBoardWithGhostPiece() {
   }
 }
 
-// WebSocket event handlers
-socket.onopen = () => {
-  console.log('Connected to server');
-  document.getElementById('status').textContent = 'Connected to server...';
-};
-
-socket.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  
-  switch (message.type) {
-    case 'piecesData':
-      // Store pieces data and preload images
-      piecesData = message.data;
-      preloadImages();
-      break;
-      
-    case 'waiting':
-      document.getElementById('status').textContent = message.message;
-      break;
-      
-    case 'gameState':
-      // Update game state
-      gameState = message.data;
-      playerColor = message.data.playerColor;
-      document.getElementById('status').textContent = 
-        gameState.status === 'active' 
-          ? `Game active - ${gameState.turn}'s turn${playerColor === gameState.turn ? ' (Your turn)' : ''}` 
-          : `Game over - ${gameState.status.split('_')[0]} wins!`;
-      
-      // Render the updated board
-      // Only call renderBoard if all images have finished loading.
-      // The preloadImages function's onload/onerror handlers will call renderBoard
-      // once image loading is complete if gameState is already set.
-      if (imagesLoadedSuccessfully === totalImagesToLoad) {
-        renderBoard();
-      }
-
-      // Update steam display HTML element
-      if (steamDisplayElement && playerColor) {
-        let currentSteam = 0;
-        if (playerColor === 'white' && gameState.whiteSteam !== undefined && gameState.whiteSteam !== null) {
-          currentSteam = gameState.whiteSteam;
-        } else if (playerColor === 'black' && gameState.blackSteam !== undefined && gameState.blackSteam !== null) {
-          currentSteam = gameState.blackSteam;
-        }
-        steamDisplayElement.textContent = `Steam: ${currentSteam}`;
-      } else if (steamDisplayElement) {
-        // If playerColor isn't set yet, or other issue, display a default
-        steamDisplayElement.textContent = "Steam: -";
-      }
-      break;
-      
-    case 'opponentDisconnected':
-      document.getElementById('status').textContent = message.message;
-      break;
+// --- WebSocket Connection Setup ---
+function connectWebSocket(token) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    console.log("Closing existing WebSocket connection.");
+    socket.close();
   }
-};
 
-socket.onclose = () => {
-  console.log('Disconnected from server');
-  document.getElementById('status').textContent = 'Disconnected from server';
-};
+  console.log(`Attempting to connect WebSocket with token: ${token ? 'present' : 'absent'}`);
+  socket = new WebSocket(`ws://${window.location.host}${token ? '?token=' + token : ''}`);
+
+  socket.onopen = () => {
+    console.log('WebSocket connected to server');
+    document.getElementById('status').textContent = 'Connected to server. Waiting for game...';
+  };
+
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    
+    switch (message.type) {
+      case 'piecesData':
+        piecesData = message.data;
+        preloadImages();
+        break;
+        
+      case 'waiting':
+        document.getElementById('status').textContent = message.message;
+        break;
+        
+      case 'gameState':
+        gameState = message.data;
+        playerColor = message.data.playerColor; // 'white' or 'black'
+        
+        // Update opponent info
+        const opponentColor = playerColor === 'white' ? 'black' : 'white';
+        let opponentName = 'Opponent'; // Default
+        if (gameState.playersInfo && gameState.playersInfo[opponentColor] && gameState.playersInfo[opponentColor].name) {
+          opponentName = gameState.playersInfo[opponentColor].name;
+        }
+        if (opponentInfoElement) {
+            opponentInfoElement.textContent = `Opponent: ${opponentName} (${opponentColor.charAt(0).toUpperCase() + opponentColor.slice(1)})`;
+        }
+
+        // Update game status text
+        let statusText = '';
+        if (gameState.status === 'active') {
+          const turnPlayerName = gameState.turn === playerColor 
+                                 ? (currentUserInfo ? currentUserInfo.name.split(' ')[0] : playerColor) 
+                                 : opponentName;
+          statusText = `${turnPlayerName}'s turn.`;
+          if (gameState.turn === playerColor) {
+            statusText += " (Your turn)";
+          }
+        } else if (gameState.status.includes('_wins')) {
+          // Server now sends status like "PlayerName_wins" or "Color_wins"
+          const winnerName = gameState.status.split('_')[0];
+          statusText = `Game Over: ${winnerName} wins!`;
+          if (winnerName === (currentUserInfo ? currentUserInfo.name : playerColor) || winnerName.toLowerCase() === playerColor) {
+             statusText += " (You Won!)";
+          } else {
+             statusText += " (You Lost)";
+          }
+        } else {
+            statusText = `Game status: ${gameState.status}`;
+        }
+        document.getElementById('status').textContent = statusText;
+        
+        if (imagesLoadedSuccessfully === totalImagesToLoad) {
+          renderBoard();
+        }
+
+        // Update steam display for the current player
+        if (steamDisplayElement && playerColor && currentUserInfo) {
+          let currentSteam = 0;
+          if (playerColor === 'white' && gameState.whiteSteam !== undefined) {
+            currentSteam = gameState.whiteSteam;
+          } else if (playerColor === 'black' && gameState.blackSteam !== undefined) {
+            currentSteam = gameState.blackSteam;
+          }
+          steamDisplayElement.textContent = `${currentUserInfo.name.split(' ')[0]}'s Steam: ${currentSteam}`;
+        } else if (steamDisplayElement) {
+          steamDisplayElement.textContent = "Steam: -"; // Fallback if name not available yet
+        }
+        break;
+        
+      case 'opponentDisconnected':
+        document.getElementById('status').textContent = message.message;
+        if (opponentInfoElement) {
+            opponentInfoElement.textContent = "Opponent: Disconnected";
+        }
+        break;
+      case 'error': // Handle server-sent errors (e.g., auth required)
+        console.error('Server error message:', message.message);
+        document.getElementById('status').textContent = `Error: ${message.message}`;
+        // Optionally, hide game and show login if it's an auth error
+        // if (loginScreen) loginScreen.style.display = 'block';
+        // if (gameContainer) gameContainer.style.display = 'none';
+        // if (instructions) instructions.style.display = 'none';
+        break;
+    }
+  };
+
+  socket.onclose = () => {
+    console.log('WebSocket disconnected from server');
+    const statusElement = document.getElementById('status');
+    if (statusElement) statusElement.textContent = 'Disconnected. Please sign in again.';
+    
+    // If disconnected before successful login (currentUserInfo not set), show login screen and error
+    if (!currentUserInfo && loginScreen && loginScreen.style.display === 'none') {
+        showLoginError("Session connection failed. Please try logging in again.");
+        if (gameContainer) gameContainer.style.display = 'none';
+        if (instructions) instructions.style.display = 'none';
+        if (loginScreen) loginScreen.style.display = 'block';
+    }
+  };
+
+  socket.onerror = (error) => {
+    console.error('WebSocket Error:', error);
+    const statusElement = document.getElementById('status');
+    if(statusElement) statusElement.textContent = 'Connection error. Please try refreshing.';
+
+    if (!currentUserInfo && loginScreen && loginScreen.style.display === 'none') {
+        showLoginError("Session connection error. Please try logging in again.");
+        if (gameContainer) gameContainer.style.display = 'none';
+        if (instructions) instructions.style.display = 'none';
+        if (loginScreen) loginScreen.style.display = 'block';
+    }
+  };
+}
+
 
 // Preload piece images
 function preloadImages() {
@@ -441,3 +517,143 @@ canvas.addEventListener('click', (event) => {
 // Initial render is problematic if assets or gameState aren't ready.
 // renderBoard(); 
 // We will now rely on the logic within preloadImages and gameState message handler to call renderBoard.
+
+// --- Google Sign-In Logic ---
+
+function showGame() {
+  if (loginScreen) loginScreen.style.display = 'none';
+  if (gameContainer) gameContainer.style.display = 'flex'; // Use 'flex' as per its original potential display style
+  if (instructions) instructions.style.display = 'block'; // Use 'block' or 'flex' based on its content
+  
+  // Potentially re-render board or initialize game further if needed now that it's visible
+  // renderBoard(); // If canvas might not have rendered correctly while hidden
+}
+
+// --- Login Error Handling ---
+function showLoginError(message) {
+  if (loginErrorMessageElement) {
+    loginErrorMessageElement.textContent = message || ''; // Clear if message is null/empty
+  }
+}
+
+function initGoogleSignIn() {
+  if (!window.gapi) {
+    console.error("Google API script not loaded yet.");
+    showLoginError("Google Sign-In library not loaded. Please check your connection or try refreshing.");
+    return;
+  }
+
+  gapi.load('auth2', function() {
+    gapi.auth2.init({
+      client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'
+    }).then(function (auth2Instance) {
+      console.log("Google Auth2 initialized");
+      showLoginError(null); // Clear any previous errors
+
+      if (googleSignInButton) {
+        googleSignInButton.addEventListener('click', function() {
+          showLoginError(null); // Clear previous errors before new attempt
+          auth2Instance.signIn().then(function(googleUser) {
+            const id_token = googleUser.getAuthResponse().id_token;
+            console.log('Google ID Token:', id_token);
+            
+            fetch('/auth/google/verify-token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id_token: id_token }),
+            })
+            .then(response => {
+              if (!response.ok) { // Check for non-2xx responses
+                // Try to parse error from server if available, otherwise generic message
+                return response.json().catch(() => ({ success: false, message: "Server returned an error." }))
+                                 .then(errData => { throw errData; }); // Throw to be caught by .catch
+              }
+              return response.json();
+            })
+            .then(data => {
+              if (data.success) {
+                console.log('Token verification successful:', data.user);
+                currentIdToken = id_token;
+                currentUserInfo = data.user;
+                connectWebSocket(currentIdToken);
+                showGame();
+                showLoginError(null); // Clear error on success
+              } else {
+                console.error('Token verification failed:', data.message);
+                showLoginError(`Authentication failed: ${data.message || "Unable to verify your Google account."}`);
+              }
+            })
+            .catch(error => { // Catches fetch network errors and thrown errors from !response.ok
+              console.error('Error verifying token:', error);
+              showLoginError(error.message || "Error communicating with server for authentication.");
+            });
+            
+          }).catch(function(error) {
+            console.error('Google Sign-In Error:', error);
+            showLoginError(`Google Sign-In failed: ${error.error || "Please try again."}`);
+          });
+        });
+      } else {
+        console.error("Google Sign-In button not found.");
+        showLoginError("Sign-in button is missing. Please contact support.");
+      }
+      
+      // Handle already signed-in user
+      if (auth2Instance.isSignedIn.get() == true) {
+        showLoginError(null); // Clear error message before attempting
+        const googleUser = auth2Instance.currentUser.get();
+        const id_token = googleUser.getAuthResponse().id_token;
+        console.log('User already signed in. Attempting server verification.');
+
+        fetch('/auth/google/verify-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: id_token }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().catch(() => ({ success: false, message: "Server returned an error for pre-signed in user." }))
+                                 .then(errData => { throw errData; });
+            }
+            return response.json();
+        })
+        .then(data => {
+          if (data.success) {
+            console.log('Token verification for already signed-in user successful:', data.user);
+            currentIdToken = id_token;
+            currentUserInfo = data.user;
+            connectWebSocket(currentIdToken);
+            showGame();
+            showLoginError(null);
+          } else {
+            console.error('Token verification for already signed-in user failed:', data.message);
+            // Do not show an error here typically, as it might be an expired token.
+            // User will just see the login button. If they click, then errors can show.
+            // Optionally sign out from GAPI if server says token is invalid.
+            // auth2Instance.signOut();
+          }
+        })
+        .catch(error => { // Catches fetch network errors and thrown errors
+          console.error('Error verifying token for already signed-in user:', error.message);
+          // Don't show error here either, login button remains visible.
+        });
+      }
+
+    }).catch(function (error) {
+      console.error("Error initializing Google Auth2: ", error);
+      showLoginError("Could not initialize Google Sign-In. Please try again later or check browser compatibility.");
+      if (googleSignInButton) {
+          googleSignInButton.disabled = true;
+          googleSignInButton.textContent = "Google Sign-In unavailable";
+      }
+    });
+  });
+}
+
+// Expose initGoogleSignIn to the global scope if it isn't already (e.g. due to module system)
+// This is necessary if it's called via an onload attribute in an HTML script tag.
+window.initGoogleSignIn = initGoogleSignIn;
+
+// Note: The call to initGoogleSignIn is handled by the onload attribute
+// in the Google Platform Library script tag in index.html:
+// <script src="https://apis.google.com/js/platform.js" onload="initGoogleSignIn()" async defer></script>
